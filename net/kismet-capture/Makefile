@@ -15,7 +15,6 @@ PKG_LICENSE_FILES:=LICENSE
 
 PKG_BUILD_DEPENDS:=libpcap libnl-tiny libwebsockets
 PKG_BUILD_PARALLEL:=1
-PKG_INSTALL:=0
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -60,10 +59,8 @@ CONFIGURE_ARGS += \
 	--disable-firmware-compression
 
 define Build/Compile
-	$(MAKE) -C $(PKG_BUILD_DIR) \
+	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR) \
 		$(TARGET_CONFIGURE_OPTS) \
-		CFLAGS="$(TARGET_CFLAGS) $(TARGET_CPPFLAGS)" \
-		LDFLAGS="$(TARGET_LDFLAGS)" \
 		capture_linux_wifi/kismet_cap_linux_wifi
 endef
 
