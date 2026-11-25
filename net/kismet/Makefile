@@ -29,7 +29,7 @@ define Package/kismet-server
   TITLE:=Kismet wireless sniffer and IDS server, with web UI
   URL:=https://www.kismetwireless.net/
   DEPENDS:=+libpcap +libnl-tiny +libopenssl +libsqlite3 +zlib +libpcre2 \
-	+libstdcpp +libpthread +kismet-capture-linux-wifi
+	+libstdcpp +libatomic +libpthread +kismet-capture-linux-wifi
 endef
 
 define Package/kismet-server/description
