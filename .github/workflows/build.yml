@@ -58,11 +58,10 @@ jobs:
       - name: Package version
         id: ver
         run: |
-          f="$(ls dist/*.apk | head -1)"
-          echo "file=$f" >> "$GITHUB_OUTPUT"
-          v="$(basename "$f" .apk | sed 's/^kismet-capture-linux-wifi-//')"
+          mk() { sed -n "s/^$2:=//p" "net/$1/Makefile"; }
+          v="$(mk kismet PKG_VERSION)-r$(mk kismet-capture PKG_RELEASE).$(mk kismet PKG_RELEASE)"
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          sha256sum dist/*.apk | tee dist/SHA256SUMS
+          (cd dist && sha256sum *.apk) | tee dist/SHA256SUMS
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -83,14 +82,22 @@ jobs:
             echo "Release $tag exists, bump PKG_RELEASE to publish a new one"
             exit 0
           fi
-          cat > notes.md <<EOF
-          kismet_cap_linux_wifi for OpenWrt ${RELEASE}, target ${TARGET} (aarch64_cortex-a53), e.g. GL.iNet GL-AXT1800 / GL-AX1800.
-
-          Install on the router:
-          \`\`\`sh
-          cd /tmp
-          wget https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/$(basename "${{ steps.ver.outputs.file }}")
-          apk add --allow-untrusted ./$(basename "${{ steps.ver.outputs.file }}")
-          \`\`\`
-          EOF
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}"
+          {
+            echo "Kismet 2026-10-R1 for OpenWrt ${RELEASE}, aarch64_cortex-a53"
+            echo "(e.g. GL.iNet GL-AXT1800 / GL-AX1800 on qualcommax/ipq60xx, Cudy TR3000 and other mediatek/filogic MT7981/MT7986 routers)."
+            echo
+            echo "| Package | What |"
+            echo "|---|---|"
+            echo "| kismet-capture-linux-wifi | Wi-Fi capture tool (remote or local) |"
+            echo "| kismet-server | Kismet server + web UI on port 2501 |"
+            echo "| kismet-capture-sdr | RTL-SDR tools: ADS-B aircraft, rtl_433 sensors, AIS ships |"
+            echo
+            echo "Install on the router (pick the packages you want):"
+            echo '```sh'
+            echo "cd /tmp"
+            for f in dist/*.apk; do echo "wget ${url}/$(basename "$f")"; done
+            echo "apk add --allow-untrusted ./kismet-*.apk"
+            echo '```'
+          } > notes.md
           gh release create "$tag" dist/*.apk dist/SHA256SUMS --title "$tag" --notes-file notes.md
