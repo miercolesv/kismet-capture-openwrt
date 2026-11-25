@@ -57,17 +57,26 @@ for PKG in $PKGS; do
   echo "== Building $PKG"
   make -j"$JOBS" package/"$PKG"/clean >/dev/null 2>&1 || true
   if ! make -j"$JOBS" package/"$PKG"/compile; then
-    kill $HB 2>/dev/null || true
-    echo "Parallel build of $PKG failed, retrying with -j1 V=s for a readable error" >&2
-    make -j1 package/"$PKG"/compile V=s > "$WORK/build.log" 2>&1 || true
-    echo "----- last 120 lines of build.log -----"
-    tail -120 "$WORK/build.log"
-    CL="$(ls build_dir/target-*/"$PKG"-[0-9]*/config.log 2>/dev/null | head -1 || true)"
-    if [ -n "$CL" ] && grep -q 'exit 1' "$CL"; then
-      echo "----- end of configure's config.log -----"
-      tail -60 "$CL"
+    echo "Parallel build of $PKG failed, retrying with -j1 V=s (also catches out-of-memory kills)" >&2
+    if make -j1 package/"$PKG"/compile V=s > "$WORK/build.log" 2>&1; then
+      echo "$PKG built on the -j1 retry (the parallel failure was probably memory)"
+    else
+      kill $HB 2>/dev/null || true
+      echo "----- compiler errors -----"
+      grep -nE 'error:|Error [0-9]+|Killed signal|fatal error' "$WORK/build.log" | head -40 || true
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then
+        grep -E 'error:|Killed signal|fatal error' "$WORK/build.log" | head -10 | \
+          while IFS= read -r l; do echo "::error title=$PKG build::${l:0:400}"; done
+      fi
+      echo "----- last 120 lines of build.log -----"
+      tail -120 "$WORK/build.log"
+      CL="$(ls build_dir/target-*/"$PKG"-[0-9]*/config.log 2>/dev/null | head -1 || true)"
+      if [ -n "$CL" ] && grep -q 'exit 1' "$CL"; then
+        echo "----- end of configure's config.log -----"
+        tail -60 "$CL"
+      fi
+      exit 1
     fi
-    exit 1
   fi
 done
 kill $HB 2>/dev/null || true

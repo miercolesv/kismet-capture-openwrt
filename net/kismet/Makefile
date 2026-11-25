@@ -18,6 +18,10 @@ PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
 
+# Some Kismet C++ files need ~3 GB to compile: limit parallel jobs to what fits
+# in memory (and to the CPU count).
+KISMET_JOBS := $(shell n=$$(nproc); m=$$(awk '/MemAvailable/{j=int($$2/3200000); if(j<1)j=1; print j}' /proc/meminfo); echo $$(( n < m ? n : m )))
+
 define Package/kismet-server
   SECTION:=net
   CATEGORY:=Network
@@ -64,7 +68,7 @@ CONFIGURE_ARGS += \
 	--disable-firmware-compression
 
 define Build/Compile
-	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR) \
+	+$(MAKE) -j$(KISMET_JOBS) -C $(PKG_BUILD_DIR) \
 		$(TARGET_CONFIGURE_OPTS) \
 		kismet log_tools/kismetdb_to_pcap log_tools/kismetdb_strip_packets \
 		capture_sdr_rtladsb_v2/kismet_cap_sdr_rtladsb \
