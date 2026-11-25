@@ -1,0 +1,87 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: OpenWrt release (e.g. 25.12.6)
+        default: '25.12.6'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04   # the OpenWrt SDK only ships x86_64 host binaries
+    env:
+      RELEASE: ${{ inputs.release || '25.12.6' }}
+      TARGET: qualcommax/ipq60xx
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Host packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential gawk gettext git libncurses-dev \
+            python3 python3-setuptools rsync unzip wget file zstd zlib1g-dev qemu-user-static
+
+      # Caches the extracted SDK including the already-built dependencies
+      # (libpcap, libnl-tiny, mbedtls, libwebsockets), so later runs only build Kismet.
+      - name: Restore SDK cache
+        uses: actions/cache@v4
+        with:
+          path: work/openwrt-sdk-*
+          key: sdk-${{ env.RELEASE }}-${{ env.TARGET }}-v1-${{ hashFiles('net/kismet-capture/Makefile') }}
+          restore-keys: |
+            sdk-${{ env.RELEASE }}-${{ env.TARGET }}-v1-
+
+      - name: Build and smoke test
+        run: ./scripts/build.sh
+
+      - name: Package version
+        id: ver
+        run: |
+          f="$(ls dist/*.apk | head -1)"
+          echo "file=$f" >> "$GITHUB_OUTPUT"
+          v="$(basename "$f" .apk | sed 's/^kismet-capture-linux-wifi-//')"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          sha256sum dist/*.apk | tee dist/SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kismet-capture-${{ env.RELEASE }}-ipq60xx
+          path: |
+            dist/
+            work/build.log
+          if-no-files-found: ignore
+
+      - name: Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.ver.outputs.version }}-openwrt${RELEASE}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag exists, bump PKG_RELEASE to publish a new one"
+            exit 0
+          fi
+          cat > notes.md <<EOF
+          kismet_cap_linux_wifi for OpenWrt ${RELEASE}, target ${TARGET} (aarch64_cortex-a53), e.g. GL.iNet GL-AXT1800 / GL-AX1800.
+
+          Install on the router:
+          \`\`\`sh
+          cd /tmp
+          wget https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/$(basename "${{ steps.ver.outputs.file }}")
+          apk add --allow-untrusted ./$(basename "${{ steps.ver.outputs.file }}")
+          \`\`\`
+          EOF
+          gh release create "$tag" dist/*.apk dist/SHA256SUMS --title "$tag" --notes-file notes.md
