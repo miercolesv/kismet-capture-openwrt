@@ -1,2 +1,6 @@
 work/
 dist/
+.DS_Store
+docs/node_modules
+docs/.vitepress/cache
+docs/.vitepress/dist
