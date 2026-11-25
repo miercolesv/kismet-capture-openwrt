@@ -41,13 +41,18 @@ uci commit kismet
 Open `http://<router-ip>:2501` and create the login on first visit.
 
 Logging is off by default: a `.kismet` database grows continuously and must not go
-to the router's flash. With a microSD card or USB drive mounted:
+to the router's flash. The service refuses to log when `log_prefix` is not on a
+mounted external drive (e.g. the card is not inserted), unless `log_to_flash` is set.
+With a microSD card or USB drive mounted:
 
 ```sh
 uci set kismet.main.logging=1
 uci set kismet.main.log_prefix=/mnt/sda1/kismet
 uci commit kismet && /etc/init.d/kismet restart
 ```
+
+Convert a log for Wireshark: `kismetdb_to_pcap --in <file>.kismet --out capture.pcap`.
+Stopping the service removes the monitor interfaces it created.
 
 Memory limits for small routers are in `/etc/kismet/kismet_site.conf`
 (devices are forgotten after 30 minutes, at most 3000 tracked).

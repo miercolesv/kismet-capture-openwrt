@@ -5,6 +5,25 @@ STOP=10
 USE_PROCD=1
 PROG=/usr/bin/kismet
 
+# Logging must go to external storage: refuse a directory whose mount point is the
+# root/overlay (router flash), e.g. /mnt/sda1/... while the card is not mounted.
+log_dir_ok() {
+	local dir="$1" probe mnt allow
+	[ -n "$dir" ] || { echo "kismet: logging on but log_prefix empty, not logging"; return 1; }
+	config_get_bool allow main log_to_flash 0
+	[ "$allow" = 1 ] && return 0
+	probe="$dir"
+	while [ ! -d "$probe" ]; do probe="${probe%/*}"; [ -n "$probe" ] || probe=/; done
+	mnt="$(df -P "$probe" 2>/dev/null | awk 'NR==2 {print $6}')"
+	case "$mnt" in
+		""|/|/overlay|/rom|/tmp)
+			echo "kismet: $dir is not on external storage (mount: ${mnt:-?}), not logging"
+			logger -t kismet "log_prefix $dir is not on external storage (mount: ${mnt:-?}); logging disabled"
+			return 1 ;;
+	esac
+	return 0
+}
+
 add_source() {
 	procd_append_param command -c "$1"
 }
@@ -24,13 +43,9 @@ start_service() {
 	procd_set_param command "$PROG" --no-ncurses --homedir "$homedir"
 	config_list_foreach main source add_source
 
-	if [ "$logging" = 1 ] && [ -n "$log_prefix" ]; then
-		if ! mkdir -p "$log_prefix" 2>/dev/null; then
-			echo "kismet: cannot create $log_prefix, logging disabled"
-			procd_append_param command -n
-		else
-			procd_append_param command -p "$log_prefix"
-		fi
+	if [ "$logging" = 1 ] && log_dir_ok "$log_prefix"; then
+		mkdir -p "$log_prefix"
+		procd_append_param command -p "$log_prefix"
 	else
 		procd_append_param command -n
 	fi
@@ -44,4 +59,17 @@ start_service() {
 
 service_triggers() {
 	procd_add_reload_trigger kismet
+}
+
+# Kismet leaves the <iface>mon monitor interfaces it created; remove them on stop
+# so the radio can go back to normal use.
+del_monitor() {
+	local ifc="${1%%:*}"
+	iw dev "${ifc}mon" info >/dev/null 2>&1 && iw dev "${ifc}mon" del
+	return 0
+}
+
+service_stopped() {
+	config_load kismet
+	config_list_foreach main source del_monitor
 }
