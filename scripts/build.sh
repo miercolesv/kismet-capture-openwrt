@@ -4,6 +4,10 @@
 #   RELEASE=25.12.6 TARGET=qualcommax/ipq60xx ./scripts/build.sh
 #   PKGS="kismet-capture" ./scripts/build.sh      # build only some source packages
 set -euo pipefail
+# In CI, any failure becomes an annotation (readable without opening the log).
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+  trap 'echo "::error title=build.sh::failed at line $LINENO: ${BASH_COMMAND:0:300}"' ERR
+fi
 
 RELEASE="${RELEASE:-25.12.6}"
 TARGET="${TARGET:-qualcommax/ipq60xx}"
@@ -104,6 +108,7 @@ if command -v qemu-aarch64-static >/dev/null || command -v qemu-aarch64 >/dev/nu
       echo "  ok   $b"
     else
       echo "  FAIL $b"; echo "$out" | head -8; fail=1
+      [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error title=smoke test $b::$(echo "$out" | head -3 | tr '\n' ' ' | cut -c1-400)"
     fi
   }
   check kismet_cap_linux_wifi  "supports sending data to a remote" --help

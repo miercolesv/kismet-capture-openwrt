@@ -18,9 +18,9 @@ PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
 
-# Some Kismet C++ files need ~3 GB to compile: limit parallel jobs to what fits
+# Some Kismet C++ files need ~3.5 GB to compile: limit parallel jobs to what fits
 # in memory (and to the CPU count).
-KISMET_JOBS := $(shell n=$$(nproc); m=$$(awk '/MemAvailable/{j=int($$2/3200000); if(j<1)j=1; print j}' /proc/meminfo); echo $$(( n < m ? n : m )))
+KISMET_JOBS := $(shell n=$$(nproc); m=$$(awk '/MemAvailable/{j=int($$2/4500000); if(j<1)j=1; print j}' /proc/meminfo); echo $$(( n < m ? n : m )))
 
 define Package/kismet-server
   SECTION:=net
