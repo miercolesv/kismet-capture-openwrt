@@ -68,8 +68,10 @@ CONFIGURE_ARGS += \
 	--disable-firmware-compression
 
 define Build/Compile
+	# No $(TARGET_CONFIGURE_OPTS) here: configure stored CXX with -std=gnu++20,
+	# and overriding CXX on the make command line would drop it.
 	+$(MAKE) -j$(KISMET_JOBS) -C $(PKG_BUILD_DIR) \
-		$(TARGET_CONFIGURE_OPTS) \
+		AR="$(TARGET_AR)" RANLIB="$(TARGET_RANLIB)" \
 		kismet log_tools/kismetdb_to_pcap log_tools/kismetdb_strip_packets \
 		capture_sdr_rtladsb_v2/kismet_cap_sdr_rtladsb \
 		capture_sdr_rtl433_v2/kismet_cap_sdr_rtl433 \
