@@ -69,8 +69,10 @@ for PKG in $PKGS; do
       echo "----- compiler errors -----"
       grep -nE 'error:|Error [0-9]+|Killed signal|fatal error' "$WORK/build.log" | head -40 || true
       if [ -n "${GITHUB_ACTIONS:-}" ]; then
-        grep -E 'error:|Killed signal|fatal error' "$WORK/build.log" | head -10 | \
-          while IFS= read -r l; do echo "::error title=$PKG build::${l:0:400}"; done
+        { grep -E 'error:|Error [0-9]+|Killed signal|fatal error|cannot stat|No such file' "$WORK/build.log" || true; } \
+          | head -12 > "$WORK/errs.txt" || true
+        tail -6 "$WORK/build.log" >> "$WORK/errs.txt" || true
+        while IFS= read -r l; do echo "::error title=$PKG build::${l:0:400}"; done < "$WORK/errs.txt"
       fi
       echo "----- last 120 lines of build.log -----"
       tail -120 "$WORK/build.log"
