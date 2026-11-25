@@ -47,6 +47,17 @@ endef
 TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include/libnl-tiny
 TARGET_CPPFLAGS += -I$(STAGING_DIR)/usr/include/libnl-tiny
 
+# Kismet's generated Makefile.inc adds -g and -O3 (after OpenWrt's -Os, so -O3 wins).
+# Debug info is stripped from the package anyway and -O3 bloats the binary; both make
+# single C++ files need several GB to compile. Without -pipe, a compile killed for
+# memory cannot leave a truncated object file behind.
+define Build/Configure
+	$(call Build/Configure/Default)
+	$(SED) 's/ -g / /g; s/ -O3//g; s/ -pipe / /g' $(PKG_BUILD_DIR)/Makefile.inc
+	grep -qE '(^| )-(g|O3|pipe)( |$$)' $(PKG_BUILD_DIR)/Makefile.inc && \
+		{ echo "Makefile.inc still has -g/-O3/-pipe"; exit 1; } || true
+endef
+
 CONFIGURE_ARGS += \
 	--sysconfdir=/etc/kismet \
 	--with-netlink-tiny \
