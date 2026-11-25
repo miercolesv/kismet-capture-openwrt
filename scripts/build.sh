@@ -39,11 +39,19 @@ make defconfig >/dev/null
 echo "== Build"
 rm -rf bin/packages/*/kismetlocal
 make -j"$JOBS" package/kismet-capture/clean >/dev/null 2>&1 || true
-if ! make -j"$JOBS" package/kismet-capture/compile V=s > "$WORK/build.log" 2>&1; then
-  echo "Parallel build failed, retrying with -j1 for a readable error" >&2
-  make -j1 package/kismet-capture/compile V=s 2>&1 | tee "$WORK/build.log" | tail -80
+# Without V=s, make prints one " make[N] <package> compile" line per package: visible
+# progress without the full compiler output. A heartbeat shows long steps are alive.
+( while sleep 60; do echo "   ... still building ($(date +%T))"; done ) &
+HB=$!
+trap 'kill $HB 2>/dev/null || true' EXIT
+if ! make -j"$JOBS" package/kismet-capture/compile; then
+  kill $HB 2>/dev/null || true
+  echo "Parallel build failed, retrying with -j1 V=s for a readable error" >&2
+  make -j1 package/kismet-capture/compile V=s > "$WORK/build.log" 2>&1 || true
+  tail -80 "$WORK/build.log"
   exit 1
 fi
+kill $HB 2>/dev/null || true
 
 APK="$(ls bin/packages/*/kismetlocal/kismet-capture-linux-wifi-*.apk | head -1)"
 cp "$APK" "$OUT/"
