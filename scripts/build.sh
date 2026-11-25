@@ -29,8 +29,13 @@ fi
 cd "$SDK_DIR"
 
 echo "== Feeds"
+# The feed must contain only the package dirs: linking the repo root would also
+# pull in work/ (this SDK) and loop.
+FEED="$WORK/feed"
+rm -rf "$FEED"; mkdir -p "$FEED"
+ln -s "$REPO/net" "$FEED/net"
 cp feeds.conf.default feeds.conf
-echo "src-link kismetlocal $REPO" >> feeds.conf
+echo "src-link kismetlocal $FEED" >> feeds.conf
 ./scripts/feeds update base packages kismetlocal >/dev/null
 ./scripts/feeds install -p kismetlocal kismet-capture-linux-wifi
 ./scripts/feeds install libpcap libnl-tiny libwebsockets-mbedtls >/dev/null
@@ -48,7 +53,13 @@ if ! make -j"$JOBS" package/kismet-capture/compile; then
   kill $HB 2>/dev/null || true
   echo "Parallel build failed, retrying with -j1 V=s for a readable error" >&2
   make -j1 package/kismet-capture/compile V=s > "$WORK/build.log" 2>&1 || true
-  tail -80 "$WORK/build.log"
+  echo "----- last 120 lines of build.log -----"
+  tail -120 "$WORK/build.log"
+  CL="$(ls build_dir/target-*/kismet-capture-*/config.log 2>/dev/null | head -1 || true)"
+  if [ -n "$CL" ] && grep -q 'exit 1' "$CL"; then
+    echo "----- end of configure's config.log -----"
+    tail -60 "$CL"
+  fi
   exit 1
 fi
 kill $HB 2>/dev/null || true
